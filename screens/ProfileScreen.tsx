@@ -107,9 +107,14 @@ const ProfileScreen: React.FC = () => {
     navigation.navigate('Main', { screen: 'Home' });
   };
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigation.navigate('SignIn');
+    }
+  }, []);
+
   if (!isAuthenticated) {
-    navigation.navigate('SignIn');
-    return;
+    return null;
   }
 
   return (

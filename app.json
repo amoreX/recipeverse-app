@@ -3,22 +3,18 @@
     "name": "recipeverse",
     "slug": "recipeverse",
     "version": "1.0.0",
-
     "web": {
       "favicon": "./assets/favicon.png"
     },
-
     "experiments": {
       "tsconfigPaths": true
     },
-
+    "newArchEnabled": true,
     "plugins": [],
-
+    "platforms": ["android", "web"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-
     "userInterfaceStyle": "light",
-
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -29,9 +25,16 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.recipeverse.android",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "47a38b8f-f05f-44f1-b4c6-81ec8594620e"
       }
     }
   }
