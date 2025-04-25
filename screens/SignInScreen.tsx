@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,16 +17,35 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
 import Button from '../components/Button';
 import Input from '../components/Input';
-
+import axios from 'axios';
+import { userStore } from '@/stores/userStore';
+import { useRecipeStore } from '@/stores/recipeStore';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../constants/types';
 const SignInScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-
+  const { user, isAuthenticated, setUser } = userStore();
+  const { recipes, publishedRecipes, draftRecipes, setRecipes } = useRecipeStore();
   const handleSignIn = async () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (!email || !password) {
       setError('Please enter both email and password');
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (password.length < 4) {
+      setError('Password must be at least 4 characters long');
       return;
     }
 
@@ -34,13 +53,37 @@ const SignInScreen: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // await signIn(email, password);
+      const res = await axios.post('https://recipev.vercel.app/api/auth', {
+        email: email,
+        password: password,
+      });
+      setUser(res.data.userDetails);
     } catch (err) {
       setError('Invalid email or password');
     } finally {
       setIsSubmitting(false);
     }
   };
+  useEffect(() => {
+    if (isAuthenticated) {
+      const getRecipes = async () => {
+        try {
+          const res = await axios.post('https://recipev.vercel.app/api/getRecipes', {
+            userId: user?.id,
+          });
+          const allRecipes = res.data.recipeDetails;
+          if (allRecipes) {
+            setRecipes(allRecipes);
+          }
+        } catch (err) {
+          console.log(err);
+        } finally {
+          navigation.navigate('Main', { screen: 'Home' });
+        }
+      };
+      getRecipes();
+    }
+  }, [isAuthenticated]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -48,10 +91,6 @@ const SignInScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <Text style={styles.logo}>RecipeVerse</Text>
-          </View>
-
           <View style={styles.formContainer}>
             <View style={styles.titleContainer}>
               <Text style={styles.title}>Welcome back</Text>
@@ -84,9 +123,9 @@ const SignInScreen: React.FC = () => {
               leftIcon={<Feather name="lock" size={18} color={COLORS.textMuted} />}
             />
 
-            <TouchableOpacity style={styles.forgotPassword}>
+            {/* <TouchableOpacity style={styles.forgotPassword}>
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             <Button
               title="Sign In"
@@ -95,45 +134,6 @@ const SignInScreen: React.FC = () => {
               disabled={isSubmitting}
               style={styles.signInButton}
             />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Button
-              title="Continue with Google"
-              variant="outline"
-              onPress={() => {}}
-              icon={
-                <Image
-                  source={{ uri: 'https://via.placeholder.com/20' }}
-                  style={styles.socialIcon}
-                />
-              }
-              style={styles.socialButton}
-            />
-
-            <Button
-              title="Continue with Apple"
-              variant="outline"
-              onPress={() => {}}
-              icon={
-                <Image
-                  source={{ uri: 'https://via.placeholder.com/20' }}
-                  style={styles.socialIcon}
-                />
-              }
-              style={styles.socialButton}
-            />
-
-            <View style={styles.signUpContainer}>
-              <Text style={styles.signUpText}>Don't have an account?</Text>
-              <TouchableOpacity>
-                <Text style={styles.signUpLink}>Sign up</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -148,6 +148,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
+    // alignItems: 'center',
     padding: SPACING.lg,
   },
   header: {

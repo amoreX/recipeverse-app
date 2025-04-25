@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,86 +16,30 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../constants/types';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
-// import { useAuth } from '../context/AuthContext';
+import { userStore } from '@/stores/userStore';
+import { useRecipeStore } from '@/stores/recipeStore';
+
 import Button from '../components/Button';
 import RecipeCard from '../components/RecipeCard';
 import Input from '../components/Input';
 import TagChip from '../components/TagChip';
+import { ActivityIndicator } from 'react-native';
 
-// Mock data
-const popularTags = [
-  'Seasonal',
-  'Vegetarian',
-  'Dessert',
-  'Baking',
-  'Healthy',
-  'Quick',
-  'Gluten-Free',
-];
-
-const myRecipes = [
-  {
-    id: '1',
-    title: 'Rustic Sourdough Bread',
-    description:
-      'A crusty, artisanal sourdough bread with a chewy interior and complex flavor profile.',
-    image: 'https://via.placeholder.com/400x300',
-    cookTime: 90,
-    tags: ['Baking', 'Bread', 'Seasonal'],
-    author: {
-      id: 'user1',
-      name: 'Julia Chen',
-      avatar: null,
-    },
-  },
-  {
-    id: 'draft1',
-    title: 'Work in Progress Pasta Recipe',
-    description: "A draft recipe I'm still working on...",
-    image: 'https://via.placeholder.com/400x300',
-    cookTime: 45,
-    tags: ['Italian', 'Pasta'],
-    author: {
-      id: 'user1',
-      name: 'Julia Chen',
-      avatar: null,
-    },
-    isDraft: true,
-  },
-];
-
-const popularChefs = [
-  {
-    id: 'user2',
-    name: 'Marcus Rivera',
-    avatar: null,
-    recipeCount: 12,
-  },
-  {
-    id: 'user3',
-    name: 'Sophia Kim',
-    avatar: null,
-    recipeCount: 8,
-  },
-];
-
-// Temporary dummy user object
-const user = {
-  name: 'John Doe',
-  email: 'johndoe@example.com',
-  avatar: null,
-  bio: 'A passionate home chef who loves experimenting with recipes.',
-};
-
+import { popularTags } from '../constants/types';
+import axios from 'axios';
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  //   const { user, signOut } = useAuth();
-
+  const { user, isAuthenticated, clearUser, setUser } = userStore();
+  const { recipes } = useRecipeStore();
   const [activeTab, setActiveTab] = useState<'profile' | 'recipes'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
+  const [loading, setLoading] = useState(false);
+  const [numfav, setNumfav] = useState<number>(0);
+
   const [recipeView, setRecipeView] = useState<'all' | 'published' | 'drafts'>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
@@ -106,16 +50,50 @@ const ProfileScreen: React.FC = () => {
       setSelectedTags([...selectedTags, tag]);
     }
   };
+  useEffect(() => {
+    const handleNumfav = async () => {
+      try {
+        const res = await axios.post('https://recipev.vercel.app/api/countFav', {
+          userId: user?.id,
+        });
+        setNumfav(res.data.numfav);
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    handleNumfav();
+  }, [user]);
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    const updatedUser = {
+      ...user,
+      name: name.trim() !== '' ? name : user?.name,
+      bio: bio.trim() !== '' ? bio : user?.bio,
+      avatar_url: user?.avatar_url,
+    };
 
-  const handleSaveProfile = () => {
-    // In a real app, this would save to the database
-    setIsEditing(false);
-    // Show success message
+    setLoading(true); // Start loading
+    try {
+      await handleBackendSave(updatedUser);
+      setUser(updatedUser);
+      setIsEditing(false);
+    } catch (err) {
+      console.log('Backend profile update ERROR!');
+    } finally {
+      setLoading(false); // End loading
+    }
   };
-
-  const filteredRecipes = myRecipes.filter((recipe) => {
-    if (recipeView === 'published' && recipe.isDraft) return false;
-    if (recipeView === 'drafts' && !recipe.isDraft) return false;
+  const handleBackendSave = async (updatedUser: NonNullable<typeof user>) => {
+    await axios.post('https://recipev.vercel.app/api/updateUser', {
+      userId: updatedUser.id,
+      name: updatedUser.name || '',
+      bio: updatedUser.bio || '',
+      avatarurl: updatedUser.avatar_url || '',
+    });
+  };
+  const filteredRecipes = recipes.filter((recipe) => {
+    if (recipeView === 'published' && !recipe.is_published) return false;
+    if (recipeView === 'drafts' && recipe.is_published) return false;
 
     if (selectedTags.length > 0) {
       return selectedTags.some((tag) => recipe.tags.includes(tag));
@@ -124,9 +102,15 @@ const ProfileScreen: React.FC = () => {
     return true;
   });
 
-  const handleUserPress = (userId: string) => {
-    navigation.navigate('UserProfile', { userId });
+  const handleLogout = () => {
+    clearUser();
+    navigation.navigate('Main', { screen: 'Home' });
   };
+
+  if (!isAuthenticated) {
+    navigation.navigate('SignIn');
+    return;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -142,12 +126,17 @@ const ProfileScreen: React.FC = () => {
                 onPress={() => setIsEditing(false)}
                 style={styles.headerButton}
               />
-              <Button
-                title="Save"
-                size="small"
-                onPress={handleSaveProfile}
-                style={styles.headerButton}
-              />
+              {loading ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <Button
+                  title="Save"
+                  size="small"
+                  onPress={handleSaveProfile}
+                  style={styles.headerButton}
+                  disabled={loading} // Disable button while loading
+                />
+              )}
             </View>
           ) : (
             <Button
@@ -189,17 +178,12 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.profileContent}>
             <View style={styles.profileHeader}>
               <View style={styles.avatarContainer}>
-                {user?.avatar ? (
-                  <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                {user?.avatar_url ? (
+                  <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
                 ) : (
                   <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarFallbackText}>{user?.name.charAt(0)}</Text>
+                    <Text style={styles.avatarFallbackText}>{user?.email?.charAt(0)}</Text>
                   </View>
-                )}
-                {isEditing && (
-                  <TouchableOpacity style={styles.editAvatarButton}>
-                    <Feather name="camera" size={16} color={COLORS.white} />
-                  </TouchableOpacity>
                 )}
               </View>
               {!isEditing && (
@@ -240,51 +224,20 @@ const ProfileScreen: React.FC = () => {
               <Text style={styles.cardTitle}>Stats</Text>
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{myRecipes.length}</Text>
+                  <Text style={styles.statValue}>{recipes.length}</Text>
                   <Text style={styles.statLabel}>Recipes</Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Text style={styles.statValue}>15</Text>
+                  <Text style={styles.statValue}>{numfav}</Text>
                   <Text style={styles.statLabel}>Favorites</Text>
                 </View>
               </View>
             </View>
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Find Other Chefs</Text>
-              <Input
-                placeholder="Search for other users..."
-                leftIcon={<Feather name="search" size={16} color={COLORS.textMuted} />}
-                containerStyle={styles.searchInput}
-              />
-              <Text style={styles.sectionSubtitle}>Popular chefs you might like to follow:</Text>
-              {popularChefs.map((chef) => (
-                <TouchableOpacity
-                  key={chef.id}
-                  style={styles.chefItem}
-                  onPress={() => handleUserPress(chef.id)}>
-                  <View style={styles.chefAvatarContainer}>
-                    {chef.avatar ? (
-                      <Image source={{ uri: chef.avatar }} style={styles.chefAvatar} />
-                    ) : (
-                      <View style={styles.chefAvatarFallback}>
-                        <Text style={styles.chefAvatarFallbackText}>{chef.name.charAt(0)}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.chefInfo}>
-                    <Text style={styles.chefName}>{chef.name}</Text>
-                    <Text style={styles.chefRecipeCount}>{chef.recipeCount} recipes</Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              ))}
-            </View>
-
             <Button
               title="Sign Out"
               variant="outline"
-              onPress={() => console.log('signingout')}
+              onPress={() => handleLogout()}
               style={styles.signOutButton}
             />
           </View>
