@@ -1,7 +1,5 @@
-'use client';
-
 import type React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,58 +13,42 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList } from '../constants/types';
 import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
 import TagChip from '../components/TagChip';
 import Button from '../components/Button';
-
+import { Recipe, Ingredient, User } from '../constants/types';
+import axios from 'axios';
+import { userStore } from '@/stores/userStore';
+import { useRecipeStore } from '@/stores/recipeStore';
 type RecipeDetailRouteProp = RouteProp<RootStackParamList, 'RecipeDetail'>;
 
 // Mock data for a single recipe
-const recipe = {
-  id: '1',
-  title: 'Rustic Sourdough Bread',
-  description:
-    'A crusty, artisanal sourdough bread with a chewy interior and complex flavor profile. Perfect for sandwiches or alongside soups.',
-  image: 'https://via.placeholder.com/800x400',
-  cookTime: 90,
-  servings: 8,
-  tags: ['Baking', 'Bread', 'Seasonal'],
-  author: {
-    id: 'user1',
-    name: 'Julia Chen',
-    avatar: null,
-  },
-  ingredients: [
-    '500g bread flour',
-    '350g water',
-    '100g active sourdough starter',
-    '10g salt',
-    'Rice flour for dusting',
-  ],
-  instructions: [
-    'Mix flour, water, and starter until no dry flour remains. Let rest for 30 minutes.',
-    'Add salt and fold dough to incorporate. Let rest for 30 minutes.',
-    'Perform 3-4 sets of stretch and folds, 30 minutes apart.',
-    'Shape dough into a tight ball and place in a floured banneton, seam side up.',
-    'Refrigerate overnight (8-12 hours) for slow fermentation.',
-    'Preheat oven to 500°F (260°C) with a Dutch oven inside.',
-    'Turn dough out onto parchment, score the top, and transfer to the hot Dutch oven.',
-    'Bake covered for 20 minutes, then uncovered for 20-25 minutes until deep golden brown.',
-    'Cool completely on a wire rack before slicing.',
-  ],
-};
 
 const RecipeDetailScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RecipeDetailRouteProp>();
   const { recipeId } = route.params;
-
+  const { isAuthenticated, user } = userStore();
+  const { selectedRecipe } = useRecipeStore();
   const [isSaved, setIsSaved] = useState(false);
+  const [recipeUser, setRecipeUser] = useState<User | null>();
   const [checkedIngredients, setCheckedIngredients] = useState<string[]>([]);
-
+  const recipe = selectedRecipe;
   const toggleSave = () => {
-    setIsSaved(!isSaved);
+    if (!isAuthenticated) {
+      navigation.navigate('SignIn');
+      return;
+    }
+
+    const handleSave = async () => {
+      await axios.post('https://recipev.vercel.app/api/addFavourite', {
+        userId: user?.id,
+        recipeId: recipe?.id,
+      });
+      setIsSaved(!isSaved);
+    };
+    handleSave();
   };
 
   const toggleIngredient = (ingredient: string) => {
@@ -77,33 +59,40 @@ const RecipeDetailScreen: React.FC = () => {
     }
   };
 
-  const handleAuthorPress = () => {
-    navigation.navigate('UserProfile', { userId: recipe.author.id });
+  const gettingUser = async () => {
+    if (!recipe) return;
+    const res = await axios.post('https://recipev.vercel.app/api/getRecipeUser', {
+      userId: recipe.user_id,
+    });
+    setRecipeUser(res.data.user);
   };
+  useEffect(() => {
+    gettingUser();
+  }, [recipe]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <ImageBackground source={{ uri: recipe.image }} style={styles.heroImage}>
+        <ImageBackground source={{ uri: recipe?.image_url }} style={styles.heroImage}>
           <View style={styles.heroOverlay}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
               <Feather name="arrow-left" size={24} color={COLORS.white} />
             </TouchableOpacity>
             <View style={styles.heroContent}>
               <View style={styles.tagsContainer}>
-                {recipe.tags.map((tag, index) => (
+                {recipe?.tags.map((tag, index) => (
                   <TagChip key={index} tag={tag} variant="light" />
                 ))}
               </View>
-              <Text style={styles.title}>{recipe.title}</Text>
+              <Text style={styles.title}>{recipe?.title}</Text>
               <View style={styles.metaContainer}>
                 <View style={styles.metaItem}>
                   <Feather name="clock" size={16} color={COLORS.white} />
-                  <Text style={styles.metaText}>{recipe.cookTime} mins</Text>
+                  <Text style={styles.metaText}>{recipe?.cook_time} mins</Text>
                 </View>
                 <View style={styles.metaItem}>
                   <Feather name="users" size={16} color={COLORS.white} />
-                  <Text style={styles.metaText}>{recipe.servings} servings</Text>
+                  <Text style={styles.metaText}>{recipe?.servings} servings</Text>
                 </View>
               </View>
             </View>
@@ -112,17 +101,17 @@ const RecipeDetailScreen: React.FC = () => {
 
         <View style={styles.content}>
           <View style={styles.authorContainer}>
-            <TouchableOpacity style={styles.author} onPress={handleAuthorPress}>
+            <TouchableOpacity style={styles.author}>
               <View style={styles.avatarContainer}>
-                {recipe.author.avatar ? (
-                  <Image source={{ uri: recipe.author.avatar }} style={styles.avatar} />
+                {recipeUser?.avatar_url ? (
+                  <Image source={{ uri: recipeUser.avatar_url }} style={styles.avatar} />
                 ) : (
                   <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarFallbackText}>{recipe.author.name.charAt(0)}</Text>
+                    <Text style={styles.avatarFallbackText}>{recipeUser?.email.charAt(0)}</Text>
                   </View>
                 )}
               </View>
-              <Text style={styles.authorName}>{recipe.author.name}</Text>
+              <Text style={styles.authorName}>{recipeUser?.name}</Text>
             </TouchableOpacity>
             <View style={styles.actionButtons}>
               <TouchableOpacity
@@ -138,53 +127,45 @@ const RecipeDetailScreen: React.FC = () => {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>{recipe.description}</Text>
+            <Text style={styles.description}>{recipe?.description}</Text>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ingredients</Text>
             <View style={styles.ingredientsList}>
-              {recipe.ingredients.map((ingredient, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.ingredientItem}
-                  onPress={() => toggleIngredient(ingredient)}>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      checkedIngredients.includes(ingredient) && styles.checkedBox,
-                    ]}>
-                    {checkedIngredients.includes(ingredient) && (
-                      <Feather name="check" size={14} color={COLORS.white} />
-                    )}
-                  </View>
-                  <Text
-                    style={[
-                      styles.ingredientText,
-                      checkedIngredients.includes(ingredient) && styles.checkedText,
-                    ]}>
-                    {ingredient}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {recipe?.ingredients.map((ingredient, index) => {
+                const description = ingredient.description;
+                const isChecked = checkedIngredients.includes(description);
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.ingredientItem}
+                    onPress={() => toggleIngredient(description)}>
+                    <View style={[styles.checkbox, isChecked && styles.checkedBox]}>
+                      {isChecked && <Feather name="check" size={14} color={COLORS.white} />}
+                    </View>
+                    <Text style={[styles.ingredientText, isChecked && styles.checkedText]}>
+                      {description}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Instructions</Text>
             <View style={styles.instructionsList}>
-              {recipe.instructions.map((instruction, index) => (
+              {recipe?.instructions.map((i, index) => (
                 <View key={index} style={styles.instructionItem}>
                   <View style={styles.instructionNumber}>
                     <Text style={styles.instructionNumberText}>{index + 1}</Text>
                   </View>
-                  <Text style={styles.instructionText}>{instruction}</Text>
+                  <Text style={styles.instructionText}>{i.description}</Text>
                 </View>
               ))}
             </View>
           </View>
-
-          <Button title="Print Recipe" onPress={() => {}} style={styles.printButton} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -202,7 +183,7 @@ const styles = StyleSheet.create({
   heroOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     padding: SPACING.lg,
   },
   backButton: {

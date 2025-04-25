@@ -1,66 +1,91 @@
 import type React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList } from '../constants/types';
 import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
 import TagChip from './TagChip';
-
-interface Author {
-  id: string;
-  name: string;
-  avatar: string | null;
-}
-
-interface Recipe {
-  id: string;
-  title: string;
-  description: string;
-  image: string;
-  cookTime: number;
-  tags: string[];
-  author: Author;
-  isDraft?: boolean;
-}
-
+import { Recipe } from '../constants/types';
+import axios from 'axios';
+import { userStore } from '@/stores/userStore';
+import { User } from '../constants/types';
+import { useRecipeStore } from '@/stores/recipeStore';
 interface RecipeCardProps {
   recipe: Recipe;
-  onSave?: () => void;
-  isSaved?: boolean;
 }
 
 const { width } = Dimensions.get('window');
 
-const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSave, isSaved = false }) => {
+const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
+  const { isAuthenticated, user } = userStore();
+  const { selectRecipe } = useRecipeStore();
+  const [recipeUser, setRecipeUser] = useState<User | null>();
+  const [isSaved, setSave] = useState(false);
   const handlePress = () => {
+    selectRecipe(recipe);
     navigation.navigate('RecipeDetail', { recipeId: recipe.id });
   };
 
-  const handleAuthorPress = () => {
-    navigation.navigate('UserProfile', { userId: recipe.author.id });
+  const gettingUser = async () => {
+    const res = await axios.post('https://recipev.vercel.app/api/getRecipeUser', {
+      userId: recipe.user_id,
+    });
+    setRecipeUser(res.data.user);
   };
+  useEffect(() => {
+    gettingUser();
+  }, [recipe]);
+
+  const toggleSave = () => {
+    if (!isAuthenticated) {
+      navigation.navigate('SignIn');
+      return;
+    }
+
+    const handleSave = async () => {
+      await axios.post('https://recipev.vercel.app/api/addFavourite', {
+        userId: user?.id,
+        recipeId: recipe.id,
+      });
+      setSave(!isSaved);
+    };
+    handleSave();
+  };
+
+  useEffect(() => {
+    const fetchFavourites = async () => {
+      if (!user?.id) return;
+      try {
+        const res = await axios.post('https://recipev.vercel.app/api/getFavourites', {
+          userId: user.id,
+        });
+        const isAlreadySaved = res.data.favs?.some((r: { id: string }) => r.id === recipe.id);
+        setSave(isAlreadySaved);
+      } catch (error) {
+        console.error('Error fetching favorites:', error);
+      }
+    };
+
+    fetchFavourites();
+  }, [user?.id, recipe.id]);
 
   return (
     <TouchableOpacity style={styles.card} onPress={handlePress} activeOpacity={0.9}>
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: recipe.image || 'https://via.placeholder.com/400x300' }}
+          source={{ uri: recipe.image_url || 'https://via.placeholder.com/400x300' }}
           style={styles.image}
           resizeMode="cover"
         />
-        {recipe.isDraft && (
-          <View style={styles.draftBadge}>
-            <Text style={styles.draftText}>Draft</Text>
-          </View>
-        )}
+
         <TouchableOpacity
           style={styles.saveButton}
           onPress={(e) => {
             e.stopPropagation();
-            onSave && onSave();
+            toggleSave();
           }}>
           <Feather
             name={isSaved ? 'heart' : 'heart'}
@@ -86,23 +111,23 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onSave, isSaved = false
           {recipe.description}
         </Text>
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.author} onPress={handleAuthorPress}>
+          <TouchableOpacity style={styles.author}>
             <View style={styles.avatarContainer}>
-              {recipe.author.avatar ? (
-                <Image source={{ uri: recipe.author.avatar }} style={styles.avatar} />
+              {recipeUser?.avatar_url ? (
+                <Image source={{ uri: recipeUser.avatar_url }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarFallbackText}>{recipe.author.name.charAt(0)}</Text>
+                  <Text style={styles.avatarFallbackText}>{recipeUser?.name?.charAt(0)}</Text>
                 </View>
               )}
             </View>
             <Text style={styles.authorName} numberOfLines={1}>
-              {recipe.author.name}
+              {recipeUser?.name ? recipeUser.name : recipeUser?.email}
             </Text>
           </TouchableOpacity>
           <View style={styles.cookTime}>
             <Feather name="clock" size={14} color={COLORS.textMuted} />
-            <Text style={styles.cookTimeText}>{recipe.cookTime} mins</Text>
+            <Text style={styles.cookTimeText}>{recipe.cook_time} mins</Text>
           </View>
         </View>
       </View>

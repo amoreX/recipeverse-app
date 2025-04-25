@@ -8,6 +8,8 @@ export const COLORS = {
   white: '#FFFFFF',
   border: '#E8E2D9',
   accent: '#F8F5F0',
+  skeleton: '#e0e0e0',
+
   error: '#DC2626',
 };
 

@@ -12,7 +12,7 @@ import FavoritesScreen from '../screens/FavouritesScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 
 // Types
-import type { RootStackParamList, MainTabParamList } from './types';
+import type { RootStackParamList, MainTabParamList } from '../constants/types';
 import { View } from 'react-native';
 import { COLORS } from '../constants/theme';
 

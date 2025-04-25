@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,86 +11,71 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
 import RecipeCard from '../components/RecipeCard';
+import SkeletonCard from '../components/SkeletonCard';
 import TagChip from '../components/TagChip';
-
-// Mock data
-const popularTags = [
-  'Seasonal',
-  'Vegetarian',
-  'Dessert',
-  'Baking',
-  'Healthy',
-  'Quick',
-  'Gluten-Free',
-];
-
-const featuredRecipes = [
-  {
-    id: '1',
-    title: 'Rustic Sourdough Bread',
-    description:
-      'A crusty, artisanal sourdough bread with a chewy interior and complex flavor profile.',
-    image: 'https://via.placeholder.com/400x300',
-    cookTime: 90,
-    tags: ['Baking', 'Bread', 'Seasonal'],
-    author: {
-      id: 'user1',
-      name: 'Julia Chen',
-      avatar: null,
-    },
-  },
-  {
-    id: '2',
-    title: 'Summer Berry Pavlova',
-    description:
-      'A light and elegant dessert featuring a crisp meringue base topped with whipped cream and fresh seasonal berries.',
-    image: 'https://via.placeholder.com/400x300',
-    cookTime: 120,
-    tags: ['Dessert', 'Seasonal', 'Gluten-Free'],
-    author: {
-      id: 'user2',
-      name: 'Marcus Rivera',
-      avatar: null,
-    },
-  },
-  {
-    id: '3',
-    title: 'Herb-Roasted Vegetable Salad',
-    description:
-      'A hearty and nutritious salad featuring roasted seasonal vegetables, fresh herbs, and a tangy vinaigrette.',
-    image: 'https://via.placeholder.com/400x300',
-    cookTime: 45,
-    tags: ['Salad', 'Vegetarian', 'Healthy'],
-    author: {
-      id: 'user3',
-      name: 'Sophia Kim',
-      avatar: null,
-    },
-  },
-];
+import { popularTags, Recipe } from '@/constants/types';
+import axios from 'axios';
 
 const HomeScreen: React.FC = () => {
-  const [selectedTag, setSelectedTag] = useState('Seasonal');
-  const [savedRecipes, setSavedRecipes] = useState<string[]>([]);
+  const [selectedTag, setSelectedTag] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
+  const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
 
-  const toggleSaveRecipe = (recipeId: string) => {
-    if (savedRecipes.includes(recipeId)) {
-      setSavedRecipes(savedRecipes.filter((id) => id !== recipeId));
-    } else {
-      setSavedRecipes([...savedRecipes, recipeId]);
-    }
-  };
+  useEffect(() => {
+    if (allRecipes.length === 0) return;
+
+    const interval = setInterval(() => {
+      setCurrentHeroIndex((prev) => (prev + 1) % allRecipes.length);
+    }, 4000); // change image every 4 seconds
+
+    return () => clearInterval(interval);
+  }, [allRecipes]);
+
+  useEffect(() => {
+    const fetchRecipes = async () => {
+      try {
+        setLoading(true);
+        const res = await axios.get('https://recipev.vercel.app/api/getAllRecipes');
+        setAllRecipes(res.data.allRecipes);
+        setFilteredRecipes(res.data.allRecipes);
+      } catch (error) {
+        console.error('Failed to fetch recipes:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRecipes();
+  }, []);
+
+  useEffect(() => {
+    const lowerSearch = searchQuery.toLowerCase();
+    const filtered = allRecipes.filter((recipe) => {
+      const matchesTag = selectedTag ? recipe.tags.includes(selectedTag) : true;
+      const matchesSearch = recipe.title.toLowerCase().includes(lowerSearch);
+      return matchesTag && matchesSearch;
+    });
+    setFilteredRecipes(filtered);
+  }, [selectedTag, searchQuery, allRecipes]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <ImageBackground
-          source={{ uri: 'https://via.placeholder.com/800x400' }}
+          source={{
+            uri:
+              allRecipes.length > 0
+                ? allRecipes[currentHeroIndex]?.image_url || 'https://via.placeholder.com/800x400'
+                : 'https://via.placeholder.com/800x400',
+          }}
           style={styles.heroImage}>
           <View style={styles.heroOverlay}>
             <View style={styles.heroContent}>
@@ -110,6 +95,8 @@ const HomeScreen: React.FC = () => {
                   style={styles.searchInput}
                   placeholder="Search for recipes..."
                   placeholderTextColor={COLORS.textMuted}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
                 />
               </View>
             </View>
@@ -126,7 +113,9 @@ const HomeScreen: React.FC = () => {
             style={styles.tagsScrollView}>
             <View style={styles.tagsContainer}>
               {popularTags.map((tag) => (
-                <TouchableOpacity key={tag} onPress={() => setSelectedTag(tag)}>
+                <TouchableOpacity
+                  key={tag}
+                  onPress={() => setSelectedTag(selectedTag === tag ? '' : tag)}>
                   <TagChip tag={tag} active={selectedTag === tag} />
                 </TouchableOpacity>
               ))}
@@ -138,18 +127,21 @@ const HomeScreen: React.FC = () => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Featured Recipes</Text>
           </View>
-          <FlatList
-            data={featuredRecipes}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <RecipeCard
-                recipe={item}
-                isSaved={savedRecipes.includes(item.id)}
-                onSave={() => toggleSaveRecipe(item.id)}
-              />
-            )}
-            scrollEnabled={false}
-          />
+
+          {loading ? (
+            <View>
+              {[1, 2, 3].map((i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </View>
+          ) : (
+            <FlatList
+              data={filteredRecipes}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => <RecipeCard recipe={item} />}
+              scrollEnabled={false}
+            />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -219,7 +211,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   section: {
-    padding: SPACING.lg,
+    padding: SPACING.md,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -233,7 +225,7 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
   },
   tagsScrollView: {
-    marginBottom: SPACING.md,
+    // marginBottom: SPACING.sm,
   },
   tagsContainer: {
     flexDirection: 'row',

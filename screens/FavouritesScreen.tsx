@@ -1,66 +1,30 @@
 'use client';
 
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList } from '../constants/types';
 import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
 import Button from '../components/Button';
 import RecipeCard from '../components/RecipeCard';
 import Input from '../components/Input';
 import TagChip from '../components/TagChip';
-
-// Mock data
-const popularTags = [
-  'Seasonal',
-  'Vegetarian',
-  'Dessert',
-  'Baking',
-  'Healthy',
-  'Quick',
-  'Gluten-Free',
-];
-
-const savedRecipes = [
-  {
-    id: '1',
-    title: 'Rustic Sourdough Bread',
-    description:
-      'A crusty, artisanal sourdough bread with a chewy interior and complex flavor profile.',
-    image: 'https://via.placeholder.com/400x300',
-    cookTime: 90,
-    tags: ['Baking', 'Bread', 'Seasonal'],
-    author: {
-      id: 'user1',
-      name: 'Julia Chen',
-      avatar: null,
-    },
-  },
-  {
-    id: '2',
-    title: 'Summer Berry Pavlova',
-    description:
-      'A light and elegant dessert featuring a crisp meringue base topped with whipped cream and fresh seasonal berries.',
-    image: 'https://via.placeholder.com/400x300',
-    cookTime: 120,
-    tags: ['Dessert', 'Seasonal', 'Gluten-Free'],
-    author: {
-      id: 'user2',
-      name: 'Marcus Rivera',
-      avatar: null,
-    },
-  },
-];
+import { popularTags } from '../constants/types';
+import { userStore } from '@/stores/userStore';
+import { Recipe } from '../constants/types';
+import axios from 'axios';
 
 const FavoritesScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [searchQuery, setSearchQuery] = useState('');
+  const { user, isAuthenticated } = userStore();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>(savedRecipes.map((r) => r.id));
+  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) {
@@ -70,30 +34,50 @@ const FavoritesScreen: React.FC = () => {
     }
   };
 
-  const toggleSaveRecipe = (recipeId: string) => {
-    if (savedRecipeIds.includes(recipeId)) {
-      setSavedRecipeIds(savedRecipeIds.filter((id) => id !== recipeId));
-    } else {
-      setSavedRecipeIds([...savedRecipeIds, recipeId]);
+  const getfav = async () => {
+    if (!isAuthenticated) {
+      setSavedRecipes([]);
+      setLoading(false); // Ensure loading ends
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await axios.post('https://recipev.vercel.app/api/getFavourites', {
+        userId: user?.id,
+      });
+      setSavedRecipes(res.data.favs || []);
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredRecipes = savedRecipes.filter((recipe) => {
-    // Only show recipes that are still in savedRecipeIds
-    if (!savedRecipeIds.includes(recipe.id)) return false;
+  useEffect(() => {
+    getfav();
+  }, [user?.id]);
 
-    // Filter by search query
+  const filteredRecipes = savedRecipes.filter((recipe) => {
     const matchesSearch =
       searchQuery === '' ||
-      recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      recipe.description.toLowerCase().includes(searchQuery.toLowerCase());
+      recipe.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      recipe.description?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Filter by selected tags
     const matchesTags =
-      selectedTags.length === 0 || selectedTags.some((tag) => recipe.tags.includes(tag));
+      selectedTags.length === 0 || selectedTags.some((tag) => recipe.tags?.includes(tag));
 
     return matchesSearch && matchesTags;
   });
+
+  const renderSkeletons = () => {
+    return (
+      <>
+        {[...Array(4)].map((_, index) => (
+          <View key={index} style={styles.skeletonCard} />
+        ))}
+      </>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -126,26 +110,14 @@ const FavoritesScreen: React.FC = () => {
               ))}
             </View>
           </ScrollView>
-
-          {filteredRecipes.length > 0 ? (
-            <FlatList
-              data={filteredRecipes}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <RecipeCard
-                  recipe={item}
-                  isSaved={savedRecipeIds.includes(item.id)}
-                  onSave={() => toggleSaveRecipe(item.id)}
-                />
-              )}
-              scrollEnabled={false}
-            />
-          ) : (
+          {loading ? (
+            renderSkeletons()
+          ) : savedRecipes.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyStateIcon}>
                 <Feather name="heart" size={32} color={COLORS.textMuted} />
               </View>
-              <Text style={styles.emptyStateTitle}>No favorites yet</Text>
+              <Text style={styles.emptyStateTitle}>No Saved Recipes</Text>
               <Text style={styles.emptyStateDescription}>
                 Start exploring recipes and save your favorites to see them here.
               </Text>
@@ -155,6 +127,13 @@ const FavoritesScreen: React.FC = () => {
                 style={styles.emptyStateButton}
               />
             </View>
+          ) : (
+            <FlatList
+              data={filteredRecipes}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => <RecipeCard recipe={item} />}
+              scrollEnabled={false}
+            />
           )}
         </View>
       </ScrollView>
@@ -227,6 +206,13 @@ const styles = StyleSheet.create({
   },
   emptyStateButton: {
     minWidth: 200,
+  },
+  skeletonCard: {
+    height: 180,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 12,
+    marginBottom: SPACING.lg,
+    opacity: 0.4,
   },
 });
 
