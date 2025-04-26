@@ -2,7 +2,7 @@
 
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -34,29 +34,6 @@ const FavoritesScreen: React.FC = () => {
     }
   };
 
-  const getfav = async () => {
-    if (!isAuthenticated) {
-      setSavedRecipes([]);
-      setLoading(false); // Ensure loading ends
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await axios.post('https://recipev.vercel.app/api/getFavourites', {
-        userId: user?.id,
-      });
-      setSavedRecipes(res.data.favs || []);
-    } catch (error) {
-      console.error('Error fetching favorites:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    getfav();
-  }, [user?.id]);
-
   const filteredRecipes = savedRecipes.filter((recipe) => {
     const matchesSearch =
       searchQuery === '' ||
@@ -79,10 +56,35 @@ const FavoritesScreen: React.FC = () => {
     );
   };
 
+  const loadFavorites = async () => {
+    if (!isAuthenticated) {
+      setSavedRecipes([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await axios.post('https://recipev.vercel.app/api/getFavourites', {
+        userId: user?.id,
+      });
+      setSavedRecipes(res.data.favs || []);
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFavorites();
+  }, []);
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Favorites</Text>
+        <TouchableOpacity onPress={loadFavorites} style={styles.refreshButton}>
+          <Feather name="refresh-ccw" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -181,6 +183,9 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: COLORS.border,
     marginTop: SPACING.lg,
+  },
+  refreshButton: {
+    padding: SPACING.sm,
   },
   emptyStateIcon: {
     width: 60,

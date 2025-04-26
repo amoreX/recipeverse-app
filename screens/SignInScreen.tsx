@@ -11,6 +11,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -31,6 +32,9 @@ const SignInScreen: React.FC = () => {
   const [error, setError] = useState('');
   const { user, isAuthenticated, setUser } = userStore();
   const { recipes, publishedRecipes, draftRecipes, setRecipes } = useRecipeStore();
+  const handleForgotPassword = () => {
+    Linking.openURL('https://recipev.vercel.app/routes/passreset/gentoken');
+  };
   const handleSignIn = async () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -123,9 +127,9 @@ const SignInScreen: React.FC = () => {
               leftIcon={<Feather name="lock" size={18} color={COLORS.textMuted} />}
             />
 
-            {/* <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity style={styles.forgotPassword} onPress={() => handleForgotPassword()}>
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity> */}
+            </TouchableOpacity>
 
             <Button
               title="Sign In"

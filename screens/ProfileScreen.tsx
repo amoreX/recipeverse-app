@@ -114,7 +114,24 @@ const ProfileScreen: React.FC = () => {
   }, []);
 
   if (!isAuthenticated) {
-    return null;
+    return (
+      <View style={styles.content}>
+        <View style={styles.emptyState}>
+          <View style={styles.emptyStateIcon}>
+            <Feather name="user" size={32} color={COLORS.textMuted} />
+          </View>
+          <Text style={styles.emptyStateTitle}>Not logged in</Text>
+          <Text style={styles.emptyStateDescription}>
+            Log in to start exploring recipes and save your favorites.
+          </Text>
+          <Button
+            title="Sign in"
+            onPress={() => navigation.navigate('SignIn')}
+            style={styles.emptyStateButton}
+          />
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -405,6 +422,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading.bold,
     fontSize: SIZES.xxxl,
     color: COLORS.primary,
+  },
+  content: {
+    padding: SPACING.lg,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   editAvatarButton: {
     position: 'absolute',

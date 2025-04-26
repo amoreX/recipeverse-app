@@ -50,7 +50,6 @@ const RecipeDetailScreen: React.FC = () => {
     };
     handleSave();
   };
-
   const toggleIngredient = (ingredient: string) => {
     if (checkedIngredients.includes(ingredient)) {
       setCheckedIngredients(checkedIngredients.filter((item) => item !== ingredient));
@@ -58,6 +57,22 @@ const RecipeDetailScreen: React.FC = () => {
       setCheckedIngredients([...checkedIngredients, ingredient]);
     }
   };
+  useEffect(() => {
+    const fetchFavourites = async () => {
+      if (!user?.id) return;
+      try {
+        const res = await axios.post('https://recipev.vercel.app/api/getFavourites', {
+          userId: user.id,
+        });
+        const isAlreadySaved = res.data.favs?.some((r: { id: string }) => r.id === recipe?.id);
+        setIsSaved(isAlreadySaved);
+      } catch (error) {
+        console.error('Error fetching favorites:', error);
+      }
+    };
+
+    fetchFavourites();
+  }, [user?.id, recipe?.id]);
 
   const gettingUser = async () => {
     if (!recipe) return;
@@ -69,7 +84,6 @@ const RecipeDetailScreen: React.FC = () => {
   useEffect(() => {
     gettingUser();
   }, [recipe]);
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>

@@ -19,16 +19,45 @@ import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
 import RecipeCard from '../components/RecipeCard';
 import SkeletonCard from '../components/SkeletonCard';
 import TagChip from '../components/TagChip';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../constants/types';
 import { popularTags, Recipe } from '@/constants/types';
 import axios from 'axios';
-
+import { userStore } from '@/stores/userStore';
+import { useRecipeStore } from '@/stores/recipeStore';
 const HomeScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   const [selectedTag, setSelectedTag] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
+  const { user, isAuthenticated } = userStore();
+  const { setRecipes } = useRecipeStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const getRecipes = async () => {
+        try {
+          const res = await axios.post('https://recipev.vercel.app/api/getRecipes', {
+            userId: user?.id,
+          });
+          const allRecipes = res.data.recipeDetails;
+          if (allRecipes) {
+            setRecipes(allRecipes);
+          }
+        } catch (err) {
+          console.log(err);
+        } finally {
+          navigation.navigate('Main', { screen: 'Home' });
+        }
+      };
+      getRecipes();
+    }
+  }, [allRecipes]);
 
   useEffect(() => {
     if (allRecipes.length === 0) return;
@@ -41,22 +70,6 @@ const HomeScreen: React.FC = () => {
   }, [allRecipes]);
 
   useEffect(() => {
-    const fetchRecipes = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get('https://recipev.vercel.app/api/getAllRecipes');
-        setAllRecipes(res.data.allRecipes);
-        setFilteredRecipes(res.data.allRecipes);
-      } catch (error) {
-        console.error('Failed to fetch recipes:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRecipes();
-  }, []);
-
-  useEffect(() => {
     const lowerSearch = searchQuery.toLowerCase();
     const filtered = allRecipes.filter((recipe) => {
       const matchesTag = selectedTag ? recipe.tags.includes(selectedTag) : true;
@@ -65,7 +78,22 @@ const HomeScreen: React.FC = () => {
     });
     setFilteredRecipes(filtered);
   }, [selectedTag, searchQuery, allRecipes]);
+  const loadRecipes = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get('https://recipev.vercel.app/api/getAllRecipes');
+      setAllRecipes(res.data.allRecipes);
+      setFilteredRecipes(res.data.allRecipes);
+    } catch (error) {
+      console.error('Failed to fetch recipes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    loadRecipes();
+  }, []);
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -126,6 +154,9 @@ const HomeScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Featured Recipes</Text>
+            <TouchableOpacity onPress={loadRecipes} style={styles.refreshButton}>
+              <Feather name="refresh-ccw" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -230,6 +261,9 @@ const styles = StyleSheet.create({
   tagsContainer: {
     flexDirection: 'row',
     gap: 8,
+  },
+  refreshButton: {
+    padding: SPACING.sm,
   },
 });
 
