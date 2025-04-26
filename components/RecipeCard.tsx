@@ -1,5 +1,5 @@
 import type React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -12,6 +12,7 @@ import axios from 'axios';
 import { userStore } from '@/stores/userStore';
 import { User } from '../constants/types';
 import { useRecipeStore } from '@/stores/recipeStore';
+
 interface RecipeCardProps {
   recipe: Recipe;
 }
@@ -21,7 +22,7 @@ const { width } = Dimensions.get('window');
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { isAuthenticated, user } = userStore();
-  const { selectRecipe } = useRecipeStore();
+  const { selectRecipe, removeRecipe } = useRecipeStore();
   const [recipeUser, setRecipeUser] = useState<User | null>();
   const [isSaved, setSave] = useState(false);
   const handlePress = () => {
@@ -55,6 +56,39 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
     handleSave();
   };
 
+  const handleDelete = () => {
+    // Show confirmation dialog
+    Alert.alert(
+      "Delete Recipe",
+      "Are you sure you want to delete this recipe?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          onPress: async () => {
+            try {
+              // Call API to delete recipe
+              await axios.post('https://recipev.vercel.app/api/deleteRecipe', {
+                recipeId: recipe.id,
+                userId: user?.id
+              });
+
+              // Remove from local state
+              removeRecipe(recipe.id);
+            } catch (error) {
+              console.error('Error deleting recipe:', error);
+              Alert.alert('Error', 'Failed to delete recipe');
+            }
+          },
+          style: "destructive"
+        }
+      ]
+    );
+  };
+
   useEffect(() => {
     const fetchFavourites = async () => {
       if (!user?.id) return;
@@ -71,6 +105,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
 
     fetchFavourites();
   }, [user?.id, recipe.id]);
+
+  // Check if current user is the recipe creator
+  const isOwner = user?.id === recipe.user_id;
 
   return (
     <TouchableOpacity style={styles.card} onPress={handlePress} activeOpacity={0.9}>
@@ -125,9 +162,21 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
               {recipeUser?.name ? recipeUser.name : recipeUser?.email}
             </Text>
           </TouchableOpacity>
-          <View style={styles.cookTime}>
-            <Feather name="clock" size={14} color={COLORS.textMuted} />
-            <Text style={styles.cookTimeText}>{recipe.cook_time} mins</Text>
+          <View style={styles.footerActions}>
+            {isOwner && (
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleDelete();
+                }}>
+                <Feather name="trash-2" size={14} color={COLORS.error} />
+              </TouchableOpacity>
+            )}
+            <View style={styles.cookTime}>
+              <Feather name="clock" size={14} color={COLORS.textMuted} />
+              <Text style={styles.cookTimeText}>{recipe.cook_time} mins</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -254,6 +303,14 @@ const styles = StyleSheet.create({
     fontSize: SIZES.xs,
     color: COLORS.textDark,
     flex: 1,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    padding: 8,
+    marginRight: 4,
   },
   cookTime: {
     flexDirection: 'row',

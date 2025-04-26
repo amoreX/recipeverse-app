@@ -17,6 +17,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../constants/types';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { Alert } from 'react-native';
+
 import { COLORS, FONTS, SIZES, SPACING } from '../constants/theme';
 import { userStore } from '@/stores/userStore';
 import { useRecipeStore } from '@/stores/recipeStore';
@@ -112,6 +114,24 @@ const ProfileScreen: React.FC = () => {
       navigation.navigate('SignIn');
     }
   }, []);
+  const handlePublish = async (recipeId: string) => {
+
+    console.log(`Publishing recipe with ID: ${recipeId}`);
+    let res = await axios.post("https://recipev.vercel.app/api/publishRecipe", {
+      recipeId: recipeId,
+    });
+    if (res) {
+      Alert.alert("Draft Saved", "Your recipe has been posted.", [
+        {
+          text: "OK",
+          onPress: () => navigation.navigate('Main', { screen: 'Profile' }), // Navigate to home/main screen
+        },
+      ]);
+
+    }
+  };
+
+
 
   if (!isAuthenticated) {
     return (
@@ -258,7 +278,7 @@ const ProfileScreen: React.FC = () => {
 
             <Button
               title="Sign Out"
-              variant="outline"
+              variant="primary"
               onPress={() => handleLogout()}
               style={styles.signOutButton}
             />
@@ -314,7 +334,18 @@ const ProfileScreen: React.FC = () => {
               <FlatList
                 data={filteredRecipes}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <RecipeCard recipe={item} />}
+                renderItem={({ item }) => (
+                  <>
+                    <RecipeCard recipe={item} />
+                    {!item.is_published && (
+                      <Button
+                        title="Publish"
+                        onPress={() => handlePublish(item.id)}
+                        style={styles.publishButton}
+                      />
+                    )}
+                  </>
+                )}
                 scrollEnabled={false}
               />
             ) : (
@@ -570,12 +601,19 @@ const styles = StyleSheet.create({
   },
   signOutButton: {
     marginBottom: SPACING.xl,
+    // backgroundColor: COLORS.background
   },
   recipesContent: {
     padding: SPACING.lg,
   },
   filterButtons: {
     marginBottom: SPACING.md,
+  },
+  publishButton: {
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+    alignSelf: 'center',
+    width: '50%',
   },
   filterButton: {
     marginRight: SPACING.sm,
